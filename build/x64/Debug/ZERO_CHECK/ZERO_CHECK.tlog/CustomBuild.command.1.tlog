@@ -1,0 +1,10 @@
+^C:\USERS\TARIK\IKT203\4SIMPLESEARCH\BUILD\CMAKEFILES\704D9267AAA58FB4B7069FC47B2B871D\GENERATE.STAMP.RULE
+setlocal
+"C:\Program Files\CMake\bin\cmake.exe" -SC:/Users/tarik/ikt203/4SimpleSearch -BC:/Users/tarik/ikt203/4SimpleSearch/build --check-stamp-list CMakeFiles/generate.stamp.list --vs-solution-file C:/Users/tarik/ikt203/4SimpleSearch/build/Submission04.sln
+if %errorlevel% neq 0 goto :cmEnd
+:cmEnd
+endlocal & call :cmErrorLevel %errorlevel% & goto :cmDone
+:cmErrorLevel
+exit /b %1
+:cmDone
+if %errorlevel% neq 0 goto :VCEnd

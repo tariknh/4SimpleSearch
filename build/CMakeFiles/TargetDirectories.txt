@@ -1,0 +1,3 @@
+C:/Users/tarik/ikt203/4SimpleSearch/build/CMakeFiles/Submission-04.dir
+C:/Users/tarik/ikt203/4SimpleSearch/build/CMakeFiles/ALL_BUILD.dir
+C:/Users/tarik/ikt203/4SimpleSearch/build/CMakeFiles/ZERO_CHECK.dir
