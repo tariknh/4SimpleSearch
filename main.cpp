@@ -11,11 +11,14 @@
 #include <random>
 #include <vector>
 #include "json.hpp"
+#ifdef HAVE_CURL
 #include <curl/curl.h>
+#endif
 #include <fstream>
 #include <iomanip>
 using json = nlohmann::json;
 
+#ifdef HAVE_CURL
 size_t write_cb(void* data, size_t size, size_t nmemb, std::string* out) {
     out->append((char*)data, size * nmemb);
     return size * nmemb;
@@ -37,6 +40,11 @@ bool fetchRandomNames(std::string& buffer) {
     curl_easy_cleanup(curl);
     return success;
 }
+#else
+bool fetchRandomNames(std::string&) {
+    return false; // CURL not available, use fallback
+}
+#endif
 
 bool writeNamesToFile(const std::string& buffer, const std::string& path) {
     try {
@@ -61,6 +69,39 @@ std::vector<std::string> loadNames(const std::string& path) {
     while (std::getline(file, line))
         if (!line.empty()) names.push_back(line);
     return names;
+}
+
+bool generateNamesFromResources(const std::string& outputPath, size_t count = 5000) {
+    // Load names from resources directory
+    auto firstNames = loadNames("resources/us_male.names");
+    auto femaleNames = loadNames("resources/us_female.names");
+    auto surnames = loadNames("resources/us_surname.names");
+    
+    // Combine male and female first names
+    firstNames.insert(firstNames.end(), femaleNames.begin(), femaleNames.end());
+    
+    if (firstNames.empty() || surnames.empty()) {
+        std::cerr << "Failed to load name resources from resources/ directory.\n";
+        return false;
+    }
+    
+    std::ofstream out(outputPath);
+    if (!out.is_open()) {
+        std::cerr << "Failed to open output file: " << outputPath << "\n";
+        return false;
+    }
+    
+    std::random_device rd;
+    std::mt19937 gen(rd());
+    std::uniform_int_distribution<size_t> firstDist(0, firstNames.size() - 1);
+    std::uniform_int_distribution<size_t> lastDist(0, surnames.size() - 1);
+    
+    for (size_t i = 0; i < count; ++i) {
+        out << firstNames[firstDist(gen)] << ' ' << surnames[lastDist(gen)] << '\n';
+    }
+    
+    std::cout << "Generated " << count << " random names from local resources.\n";
+    return out.good();
 }
 
 static time_t makeUtcTimestamp(const std::tm& tm)
@@ -220,6 +261,7 @@ public:
 	~TLinkedListNode()
 	{
 	}
+	
 };
 
 class TLinkedList
@@ -228,6 +270,55 @@ private:
 	TLinkedListNode* head;
 	bool ownsData;
 	int size;
+
+	TLinkedListNode* splitList(TLinkedListNode* head){
+		auto slow = head;
+		auto fast = head->next;
+		while (fast != nullptr && fast->next != nullptr){
+			slow = slow->next;
+			fast = fast->next->next;
+		}
+		auto mid = slow->next;
+		slow->next = nullptr;
+		return (head,mid);
+	}
+
+	TLinkedListNode* mergeTwoSortedLists(TLinkedListNode*a, TLinkedListNode*b, FCompareAccounts cmp, OperationSummary& stats)
+	{
+		TLinkedListNode* result;
+		a == nullptr && b;
+		b == nullptr && a;
+
+		if(cmp(a->data, b->data) <= 0){
+			result = a;
+			result->next = mergeTwoSortedLists(a->next, b, cmp, stats);
+		}else{
+			result = b;
+       		result->next = mergeTwoSortedLists(a, b->next, cmp, stats);
+		}
+		stats.comparisons++;
+		return result;
+	}
+
+	TLinkedListNode* mergeSortRecursive(TLinkedListNode* node, FCompareAccounts cmp, OperationSummary& stats) {
+		// Base case: 0 or 1 element
+		if (node == nullptr or node->next == nullptr)
+			return node;
+		TLinkedListNode* left = nullptr;
+		TLinkedListNode* right = nullptr;
+
+		// Step 1: Split the list in half
+		(left, right) = splitList(node);
+
+		
+
+		// Step 2: Sort each half recursively
+		left = mergeSortRecursive(left, cmp, stats);
+		right = mergeSortRecursive(right, cmp, stats);
+
+		// Step 3: Merge the two sorted halves
+		return mergeTwoSortedLists(left, right, cmp, stats);
+	}
 public:
 	TLinkedList(bool aOwnsData) : head(nullptr), ownsData(aOwnsData), size(0) {
 		head = new TLinkedListNode(nullptr); // Dummy head node
@@ -242,6 +333,27 @@ public:
 			delete temp; // Delete the node
 		}
 		delete head;
+	}
+	TLinkedListNode* getHead() const { return head; }
+
+	TLinkedList* MergeSortList(FCompareAccounts cmp, OperationSummary& stats) {
+		stats.comparisons = 0;
+		stats.swaps = 0;
+		stats.timeSpentMs = 0.0;
+
+    	TLinkedListNode* current = head->next;
+		
+
+
+    	auto start = std::chrono::high_resolution_clock::now();
+
+		TLinkedListNode* sortedHead = mergeSortRecursive(current, cmp, stats);
+		auto newList = new TLinkedList(sortedHead);
+		
+		auto end = std::chrono::high_resolution_clock::now();
+    	stats.timeSpentMs = std::chrono::duration<double, std::milli>(end - start).count();
+
+		return newList;
 	}
 
 	int getSize() const { return size; }
@@ -417,6 +529,7 @@ public:
     ~TSort();
 
     TBankAccount** SelectionSortArray(FCompareAccounts cmp, OperationSummary& outStats);
+    TLinkedListNode* SelectionSortLinkedList(FCompareAccounts cmp, OperationSummary& outStats);
     TBankAccount** BubbleSortArray(FCompareAccounts cmp, OperationSummary& outStats);
     TBankAccount** QuickSortArray(FCompareAccounts cmp, OperationSummary& outStats);
 
@@ -434,9 +547,36 @@ TSort::TSort(TLinkedList* sourceList, TBankAccount** sourceArray, int sourceCoun
 
 TSort::~TSort() {}
 
-TBankAccount** TSort::SelectionSortArray(FCompareAccounts cmp, OperationSummary& outStats)
+TLinkedListNode* TSort::SelectionSortLinkedList(FCompareAccounts cmp, OperationSummary& outStats)
 {
     outStats.comparisons = 0;
+    outStats.swaps = 0;
+    outStats.timeSpentMs = 0.0;
+
+    if (list_ == nullptr || count_ <= 0) return nullptr;
+    auto start = std::chrono::high_resolution_clock::now();
+
+
+    TLinkedListNode* current = list_->getHead()->next;
+	TLinkedListNode* minNode = current;
+	TLinkedListNode* search = current->next;
+	while (search != nullptr) {
+		if (cmp(search->data, minNode->data) < 0)
+			minNode = search;
+		search = search->next;
+		outStats.comparisons++;
+	}
+	std::swap(current->data, minNode->data);
+	outStats.swaps++;
+	
+
+    auto end = std::chrono::high_resolution_clock::now();
+    outStats.timeSpentMs = std::chrono::duration<double, std::milli>(end - start).count();
+    return current;bn 
+}
+
+TBankAccount** TSort::SelectionSortArray(FCompareAccounts cmp, OperationSummary& outStats){
+	 outStats.comparisons = 0;
     outStats.swaps = 0;
     outStats.timeSpentMs = 0.0;
 
@@ -708,10 +848,33 @@ int main()
 	//Prepare a local list of names, fall back to bundled resources if the download fails
 	const std::string namesFile = "Random_Name.txt";
 	std::string jsonBuffer;
-	if (!fetchRandomNames(jsonBuffer) || !writeNamesToFile(jsonBuffer, namesFile)) {
-        std::cerr << "Failed to fetch or write names.\n";
-        return 1;
-    }
+	bool namesReady = false;
+	
+	// Try to fetch from API if CURL is available
+	if (fetchRandomNames(jsonBuffer) && writeNamesToFile(jsonBuffer, namesFile)) {
+		std::cout << "Successfully downloaded names from API.\n";
+		namesReady = true;
+	} else {
+		std::cout << "Unable to fetch names online. Trying local fallback...\n";
+		
+		// Check if Random_Name.txt already exists
+		std::ifstream checkFile(namesFile);
+		if (checkFile.good()) {
+			std::cout << "Found existing " << namesFile << "\n";
+			checkFile.close();
+			namesReady = true;
+		} else {
+			// Generate from resources directory
+			std::cout << "Generating names from resources directory...\n";
+			namesReady = generateNamesFromResources(namesFile, 5000);
+		}
+	}
+	
+	if (!namesReady) {
+		std::cerr << "Failed to prepare names list. Ensure resources/ directory exists with name files.\n";
+		return EXIT_FAILURE;
+	}
+	
 	auto names = loadNames(namesFile);
 	std::cout << "Loaded " << names.size() << " names from file.\n";
 
@@ -736,12 +899,14 @@ int main()
 	OperationSummary selStats{};
 	OperationSummary bubStats{};
 	OperationSummary quickStats{};
+	OperationSummary mergeStats{};
 	TSort sorter(bankAccounts, bankAccountArray, totalAccounts);
 	
 
 	auto selSorted = sorter.SelectionSortArray(CompareByBalance, selStats);
 	auto bubSorted = sorter.BubbleSortArray(CompareByBalance, bubStats);
 	auto quickSorted = sorter.QuickSortArray(CompareByBalance, quickStats);
+	auto quickSorted = QuickSort
 	printOperationSummary("Bubble Sort (Array, by Balance)", bubStats);
 	printOperationSummary("Selection Sort (Array, by Balance)", selStats);
 	printOperationSummary("Quick Sort (Array, by Balance)", quickStats);
