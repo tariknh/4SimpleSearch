@@ -1,0 +1,54 @@
+# General
+.DS_Store
+Thumbs.db
+*.swp
+*~
+
+# Build output
+/build/
+/CMakeFiles/
+/cmake_install.cmake
+/CMakeCache.txt
+/Makefile
+build/*.ninja
+build/.ninja_log
+build/.ninja_deps
+build/compile_commands.json
+build/**/*.json
+
+# Compiled objects
+*.o
+*.obj
+*.lo
+*.la
+
+# Executables and libraries
+*.exe
+*.out
+*.app
+*.dll
+*.so
+*.dylib
+*.a
+*.lib
+
+# IDE/project files
+/.vscode/
+.idea/
+*.sln
+*.vcxproj*
+
+# Generated files
+Random_Name.txt
+build/Random_Name.txt
+
+# Logs
+*.log
+
+# Coverage / profiling
+.cache/
+.coverage
+coverage/
+
+# Misc
+/.vs/
