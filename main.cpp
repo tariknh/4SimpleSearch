@@ -18,6 +18,15 @@
 #include <iomanip>
 using json = nlohmann::json;
 
+typedef bool (*FNameRead)(const std::string& firstName, const std::string& lastName);
+
+struct OperationSummary{
+	long long comparisons;
+	long long swaps;
+	double timeSpentMs;
+};
+
+
 #ifdef HAVE_CURL
 size_t write_cb(void* data, size_t size, size_t nmemb, std::string* out) {
     out->append((char*)data, size * nmemb);
@@ -250,6 +259,10 @@ public:
 };
 typedef bool (*FCompareAccount)(TBankAccount* account, void* searchKey);
 typedef int (*FCompareAccounts)(TBankAccount* a, TBankAccount* b);
+struct SortResultArray {
+    TBankAccount** data;    
+    OperationSummary stats;
+};
 
 
 class TLinkedListNode
@@ -271,7 +284,7 @@ private:
 	bool ownsData;
 	int size;
 
-	TLinkedListNode* splitList(TLinkedListNode* head){
+	std::pair<TLinkedListNode*, TLinkedListNode*> splitList(TLinkedListNode* head){
 		auto slow = head;
 		auto fast = head->next;
 		while (fast != nullptr && fast->next != nullptr){
@@ -280,14 +293,14 @@ private:
 		}
 		auto mid = slow->next;
 		slow->next = nullptr;
-		return (head,mid);
+		return {head,mid};
 	}
 
 	TLinkedListNode* mergeTwoSortedLists(TLinkedListNode*a, TLinkedListNode*b, FCompareAccounts cmp, OperationSummary& stats)
 	{
 		TLinkedListNode* result;
-		a == nullptr && b;
-		b == nullptr && a;
+		 if (!a) return b;
+    	if (!b) return a;
 
 		if(cmp(a->data, b->data) <= 0){
 			result = a;
@@ -308,7 +321,7 @@ private:
 		TLinkedListNode* right = nullptr;
 
 		// Step 1: Split the list in half
-		(left, right) = splitList(node);
+		auto [left, right] = splitList(node);
 
 		
 
@@ -322,6 +335,11 @@ private:
 public:
 	TLinkedList(bool aOwnsData) : head(nullptr), ownsData(aOwnsData), size(0) {
 		head = new TLinkedListNode(nullptr); // Dummy head node
+	}
+
+	//constructor for a new list using a linkedlist node
+	TLinkedList(TLinkedListNode* node) : head(new TLinkedListNode(nullptr)), ownsData(false), size(0) {
+    	head->next = node;
 	}
 	~TLinkedList()
 	{
@@ -485,17 +503,7 @@ The TSort Class:
 
 
 // delegate a function for callback to read names from file
-typedef bool (*FNameRead)(const std::string& firstName, const std::string& lastName);
 
-struct OperationSummary{
-	long long comparisons;
-	long long swaps;
-	double timeSpentMs;
-};
-struct SortResultArray {
-    TBankAccount** data;    
-    OperationSummary stats;
-};
 
 void quickSort(TBankAccount** arr, int left, int right, FCompareAccounts cmp, OperationSummary& stats) {
     if (left >= right) return;
@@ -549,30 +557,29 @@ TSort::~TSort() {}
 
 TLinkedListNode* TSort::SelectionSortLinkedList(FCompareAccounts cmp, OperationSummary& outStats)
 {
-    outStats.comparisons = 0;
-    outStats.swaps = 0;
-    outStats.timeSpentMs = 0.0;
+    outStats = {0, 0, 0.0};
 
-    if (list_ == nullptr || count_ <= 0) return nullptr;
+    if (!list_ || !list_->getHead()->next) return nullptr;
     auto start = std::chrono::high_resolution_clock::now();
 
 
-    TLinkedListNode* current = list_->getHead()->next;
-	TLinkedListNode* minNode = current;
-	TLinkedListNode* search = current->next;
-	while (search != nullptr) {
-		if (cmp(search->data, minNode->data) < 0)
-			minNode = search;
-		search = search->next;
-		outStats.comparisons++;
-	}
-	std::swap(current->data, minNode->data);
-	outStats.swaps++;
-	
+   for (TLinkedListNode* i = list_->getHead()->next; i != nullptr; i = i->next) {
+        TLinkedListNode* minNode = i;
+        for (TLinkedListNode* j = i->next; j != nullptr; j = j->next) {
+            outStats.comparisons++;
+            if (cmp(j->data, minNode->data) < 0) {
+                minNode = j;
+            }
+        }
+        if (minNode != i) {
+            std::swap(i->data, minNode->data);
+            outStats.swaps++;
+        }
+    }
 
     auto end = std::chrono::high_resolution_clock::now();
     outStats.timeSpentMs = std::chrono::duration<double, std::milli>(end - start).count();
-    return current;bn 
+     return list_->getHead()->next;
 }
 
 TBankAccount** TSort::SelectionSortArray(FCompareAccounts cmp, OperationSummary& outStats){
@@ -906,7 +913,7 @@ int main()
 	auto selSorted = sorter.SelectionSortArray(CompareByBalance, selStats);
 	auto bubSorted = sorter.BubbleSortArray(CompareByBalance, bubStats);
 	auto quickSorted = sorter.QuickSortArray(CompareByBalance, quickStats);
-	auto quickSorted = QuickSort
+	//auto quickSorted = QuickSort
 	printOperationSummary("Bubble Sort (Array, by Balance)", bubStats);
 	printOperationSummary("Selection Sort (Array, by Balance)", selStats);
 	printOperationSummary("Quick Sort (Array, by Balance)", quickStats);
