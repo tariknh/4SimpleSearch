@@ -284,54 +284,9 @@ private:
 	bool ownsData;
 	int size;
 
-	std::pair<TLinkedListNode*, TLinkedListNode*> splitList(TLinkedListNode* head){
-		auto slow = head;
-		auto fast = head->next;
-		while (fast != nullptr && fast->next != nullptr){
-			slow = slow->next;
-			fast = fast->next->next;
-		}
-		auto mid = slow->next;
-		slow->next = nullptr;
-		return {head,mid};
-	}
+	
 
-	TLinkedListNode* mergeTwoSortedLists(TLinkedListNode*a, TLinkedListNode*b, FCompareAccounts cmp, OperationSummary& stats)
-	{
-		TLinkedListNode* result;
-		 if (!a) return b;
-    	if (!b) return a;
-
-		if(cmp(a->data, b->data) <= 0){
-			result = a;
-			result->next = mergeTwoSortedLists(a->next, b, cmp, stats);
-		}else{
-			result = b;
-       		result->next = mergeTwoSortedLists(a, b->next, cmp, stats);
-		}
-		stats.comparisons++;
-		return result;
-	}
-
-	TLinkedListNode* mergeSortRecursive(TLinkedListNode* node, FCompareAccounts cmp, OperationSummary& stats) {
-		// Base case: 0 or 1 element
-		if (node == nullptr or node->next == nullptr)
-			return node;
-		TLinkedListNode* left = nullptr;
-		TLinkedListNode* right = nullptr;
-
-		// Step 1: Split the list in half
-		auto [left, right] = splitList(node);
-
-		
-
-		// Step 2: Sort each half recursively
-		left = mergeSortRecursive(left, cmp, stats);
-		right = mergeSortRecursive(right, cmp, stats);
-
-		// Step 3: Merge the two sorted halves
-		return mergeTwoSortedLists(left, right, cmp, stats);
-	}
+	
 public:
 	TLinkedList(bool aOwnsData) : head(nullptr), ownsData(aOwnsData), size(0) {
 		head = new TLinkedListNode(nullptr); // Dummy head node
@@ -354,25 +309,7 @@ public:
 	}
 	TLinkedListNode* getHead() const { return head; }
 
-	TLinkedList* MergeSortList(FCompareAccounts cmp, OperationSummary& stats) {
-		stats.comparisons = 0;
-		stats.swaps = 0;
-		stats.timeSpentMs = 0.0;
 
-    	TLinkedListNode* current = head->next;
-		
-
-
-    	auto start = std::chrono::high_resolution_clock::now();
-
-		TLinkedListNode* sortedHead = mergeSortRecursive(current, cmp, stats);
-		auto newList = new TLinkedList(sortedHead);
-		
-		auto end = std::chrono::high_resolution_clock::now();
-    	stats.timeSpentMs = std::chrono::duration<double, std::milli>(end - start).count();
-
-		return newList;
-	}
 
 	int getSize() const { return size; }
 
@@ -505,9 +442,165 @@ The TSort Class:
 // delegate a function for callback to read names from file
 
 
-void quickSort(TBankAccount** arr, int left, int right, FCompareAccounts cmp, OperationSummary& stats) {
-    if (left >= right) return;
 
+
+TBankAccount* BinarySearchRecursive(
+    TBankAccount** arr, 
+    TBankAccount* searchKey, 
+    int left, 
+    int right, 
+    FCompareAccounts cmp, 
+    SearchSummary& summary) 
+{
+    // Base case: If the search range is invalid, the item is not found.
+    if (left > right) {
+        return nullptr;
+    }
+
+    // Find the middle index
+    int mid = left + (right - left) / 2;
+    summary.comparisons++; // Count this comparison
+
+    // Use the callback to compare the middle element with our search key
+    int comparisonResult = cmp(searchKey, arr[mid]);
+
+    if (comparisonResult == 0) {
+        // Found it!
+        return arr[mid];
+    } else if (comparisonResult < 0) {
+        // The key is in the left half
+        return BinarySearchRecursive(arr, searchKey, left, mid - 1, cmp, summary);
+    } else {
+        // The key is in the right half
+        return BinarySearchRecursive(arr, searchKey, mid + 1, right, cmp, summary);
+    }
+}
+
+// This is the public method the user calls
+TBankAccount* TSort::BinarySearch(TBankAccount* searchKey, FCompareAccounts cmp, SearchSummary& outSummary) {
+    outSummary = {0, 0.0}; // Reset the summary object
+
+    // First, check if the internal array has been sorted.
+    if (!isArraySorted_ || sortedArray_ == nullptr) {
+        std::cerr << "Error: BinarySearch called before sorting the array." << std::endl;
+        return nullptr;
+    }
+
+    auto start = std::chrono::high_resolution_clock::now();
+
+    // Call the private recursive helper to do the actual work
+    TBankAccount* foundAccount = BinarySearchRecursive(
+        sortedArray_, searchKey, 0, count_ - 1, cmp, outSummary
+    );
+
+    auto end = std::chrono::high_resolution_clock::now();
+    outSummary.timeSpentMs = std::chrono::duration<double, std::milli>(end - start).count();
+
+    return foundAccount;
+}
+
+
+
+struct TSort {
+public:
+    TSort(TLinkedList* sourceList, TBankAccount** sourceArray, int sourceCount);
+    ~TSort(){
+		delete[] sortedArray_;
+	};
+
+    TBankAccount** SelectionSortArray(FCompareAccounts cmp, OperationSummary& outStats);
+    TLinkedListNode* SelectionSortLinkedList(FCompareAccounts cmp, OperationSummary& outStats);
+    TBankAccount** BubbleSortArray(FCompareAccounts cmp, OperationSummary& outStats);
+    TBankAccount** QuickSortArray(FCompareAccounts cmp, OperationSummary& outStats);
+	TLinkedListNode* MergeSortList(FCompareAccounts cmp, OperationSummary& stats);
+	TBankAccount* BinarySearch(TBankAccount* searchKey, FCompareAccounts cmp, SearchSummary& outSummary);
+	TBankAccount** SortArrayByLastName(TBankAccount** array_);
+	
+	
+private:
+    TLinkedList* list_;
+    TBankAccount** array_;
+	TBankAccount** sortedArray_ = nullptr;;
+	bool isArraySorted_;
+    int count_;
+
+	
+	int Partition(TBankAccount** arr, int left, int right, FCompareAccounts cmp, OperationSummary& stats);
+
+	void QuickSortRecursive(TBankAccount** arr, int left, int right, FCompareAccounts cmp, OperationSummary& stats) {
+    	if (left >= right) return;
+
+
+
+		int index = Partition(arr, left, right, cmp, stats);
+
+
+
+	if (left < index - 1) {
+			QuickSortRecursive(arr, left, index - 1, cmp, stats);
+		}
+		if (index < right) {
+			QuickSortRecursive(arr, index, right, cmp, stats);
+		}
+	}
+
+	std::pair<TLinkedListNode*, TLinkedListNode*> splitList(TLinkedListNode* head){
+		auto slow = head;
+		auto fast = head->next;
+		while (fast != nullptr && fast->next != nullptr){
+			slow = slow->next;
+			fast = fast->next->next;
+		}
+		auto mid = slow->next;
+		slow->next = nullptr;
+		return {head,mid};
+	}
+
+	TLinkedListNode* mergeTwoSortedLists(TLinkedListNode*a, TLinkedListNode*b, FCompareAccounts cmp, OperationSummary& stats)
+	{
+		TLinkedListNode* result;
+		 if (!a) return b;
+    	if (!b) return a;
+
+		if(cmp(a->data, b->data) <= 0){
+			result = a;
+			result->next = mergeTwoSortedLists(a->next, b, cmp, stats);
+		}else{
+			result = b;
+       		result->next = mergeTwoSortedLists(a, b->next, cmp, stats);
+		}
+		stats.comparisons++;
+		return result;
+	}
+
+	TLinkedListNode* mergeSortRecursive(TLinkedListNode* node, FCompareAccounts cmp, OperationSummary& stats) {
+		// Base case: 0 or 1 element
+		if (node == nullptr or node->next == nullptr)
+			return node;
+		//TLinkedListNode* left = nullptr;
+		//TLinkedListNode* right = nullptr;
+
+		// Step 1: Split the list in half
+		auto [left, right] = splitList(node);
+
+		
+
+		// Step 2: Sort each half recursively
+		left = mergeSortRecursive(left, cmp, stats);
+		right = mergeSortRecursive(right, cmp, stats);
+
+		// Step 3: Merge the two sorted halves
+		return mergeTwoSortedLists(left, right, cmp, stats);
+	}
+
+};
+
+TSort::TSort(TLinkedList* sourceList, TBankAccount** sourceArray, int sourceCount)
+    : list_(sourceList), array_(sourceArray), count_(sourceCount)
+{
+}
+
+int TSort::Partition(TBankAccount** arr, int left, int right, FCompareAccounts cmp, OperationSummary& stats) {
     TBankAccount* pivot = arr[(left + right) / 2];
     int i = left;
     int j = right;
@@ -523,35 +616,37 @@ void quickSort(TBankAccount** arr, int left, int right, FCompareAccounts cmp, Op
             j--;
         }
     }
+    return i; // The split point
+}
 
-    if (left < j) quickSort(arr, left, j, cmp, stats);
-    if (i < right) quickSort(arr, i, right, cmp, stats);
+TLinkedListNode* TSort::MergeSortList(FCompareAccounts cmp, OperationSummary& stats) {
+	stats = {0, 0, 0.0};
+    if (!list_ || !list_->getHead()->next) return nullptr;
+
+	TLinkedList* newList = new TLinkedList(false);
+	
+	
+	for (TLinkedListNode* originalNode = list_->getHead()->next; originalNode != nullptr; originalNode = originalNode->next) {
+        newList->Add(originalNode->data);
+    }
+
+	TLinkedListNode* headOfNewList = newList->getHead()->next;
+	
+
+
+	auto start = std::chrono::high_resolution_clock::now();
+
+	TLinkedListNode* sortedHeadNode  = mergeSortRecursive(headOfNewList, cmp, stats);
+	
+	auto end = std::chrono::high_resolution_clock::now();
+	stats.timeSpentMs = std::chrono::duration<double, std::milli>(end - start).count();
+
+	
+	delete newList;
+     return sortedHeadNode;
 }
 
 
-
-
-struct TSort {
-public:
-    TSort(TLinkedList* sourceList, TBankAccount** sourceArray, int sourceCount);
-    ~TSort();
-
-    TBankAccount** SelectionSortArray(FCompareAccounts cmp, OperationSummary& outStats);
-    TLinkedListNode* SelectionSortLinkedList(FCompareAccounts cmp, OperationSummary& outStats);
-    TBankAccount** BubbleSortArray(FCompareAccounts cmp, OperationSummary& outStats);
-    TBankAccount** QuickSortArray(FCompareAccounts cmp, OperationSummary& outStats);
-
-
-private:
-    TLinkedList* list_;
-    TBankAccount** array_;
-    int count_;
-};
-
-TSort::TSort(TLinkedList* sourceList, TBankAccount** sourceArray, int sourceCount)
-    : list_(sourceList), array_(sourceArray), count_(sourceCount)
-{
-}
 
 TSort::~TSort() {}
 
@@ -562,24 +657,41 @@ TLinkedListNode* TSort::SelectionSortLinkedList(FCompareAccounts cmp, OperationS
     if (!list_ || !list_->getHead()->next) return nullptr;
     auto start = std::chrono::high_resolution_clock::now();
 
+	TLinkedList* newList = new TLinkedList(false);
+	
+	
+	for (TLinkedListNode* originalNode = list_->getHead()->next; originalNode != nullptr; originalNode = originalNode->next) {
+        newList->Add(originalNode->data);
+    }
 
-   for (TLinkedListNode* i = list_->getHead()->next; i != nullptr; i = i->next) {
+	for (TLinkedListNode* i = newList->getHead()->next; i != nullptr; i = i->next) {
+
+	 
+
         TLinkedListNode* minNode = i;
+
         for (TLinkedListNode* j = i->next; j != nullptr; j = j->next) {
             outStats.comparisons++;
             if (cmp(j->data, minNode->data) < 0) {
                 minNode = j;
             }
         }
+
         if (minNode != i) {
             std::swap(i->data, minNode->data);
             outStats.swaps++;
         }
     }
 
+
     auto end = std::chrono::high_resolution_clock::now();
     outStats.timeSpentMs = std::chrono::duration<double, std::milli>(end - start).count();
-     return list_->getHead()->next;
+  
+	TLinkedListNode* sortedHeadNode = newList->getHead()->next;
+	
+	newList->getHead()->next = nullptr;
+	delete newList;
+     return sortedHeadNode;
 }
 
 TBankAccount** TSort::SelectionSortArray(FCompareAccounts cmp, OperationSummary& outStats){
@@ -666,9 +778,8 @@ TBankAccount** TSort::QuickSortArray(FCompareAccounts cmp, OperationSummary& out
 	//QUICK SORT SECTION
 
 	
-	quickSort(result, 0, count_ - 1, cmp, outStats);
+	QuickSortRecursive(result, 0, count_ - 1, cmp, outStats);
 	
-
 	//
 	auto end = std::chrono::high_resolution_clock::now();
     outStats.timeSpentMs = std::chrono::duration<double, std::milli>(end - start).count();
@@ -746,7 +857,7 @@ static bool OnNameRead(const std::string& firstName, const std::string& lastName
 		TBankAccount* newAccount = new TBankAccount(accType, firstName, lastName);
 		bankAccounts->Add(newAccount);
 	}
-	return true; //bankAccounts->getSize() < 100; // For demo purposes
+	return bankAccounts->getSize() < 2000;
 }
 
 static void resetStatistics(SearchSummary& summary)
@@ -820,15 +931,20 @@ static void PrintEveryAccountInDateRange(TBankAccount** accountArray, int arrayS
 	printStatistics(summary);
 	std::cout << "Total accounts found in date range: " << foundCount << std::endl;
 }
-
-int CompareByBalance(TBankAccount* a, TBankAccount* b) {
+template <typename T>
+int CompareByBalance(T* a, T* b) {
     if (!a || !b) return 0;
     if (a->getBalance() < b->getBalance()) return -1;
     if (a->getBalance() > b->getBalance()) return 1;
     return 0;
 }
+int CompareByLastName(TBankAccount* a, TBankAccount* b) {
+    if (!a || !b) return 0;
+    return a->ownerLastName.compare(b->ownerLastName);
+}
+template <typename T>
 
-bool isSortedByBalance(TBankAccount** arr, int count, FCompareAccounts cmp) {
+bool isSortedByBalance(T** arr, int count, FCompareAccounts cmp) {
     if (arr == nullptr || count <= 1) return true;
 
     for (int i = 1; i < count; ++i) {
@@ -844,6 +960,26 @@ bool isSortedByBalance(TBankAccount** arr, int count, FCompareAccounts cmp) {
     return true;
 }
 
+
+// This is the correct way to check a sorted linked list
+bool isListSorted(TLinkedListNode* head, FCompareAccounts cmp) {
+    // A list with 0 or 1 element is always sorted.
+    if (head == nullptr || head->next == nullptr) {
+        return true;
+    }
+
+    TLinkedListNode* current = head;
+    while (current->next != nullptr) {
+        // If a node's data is "greater than" the next node's data, it's out of order.
+        if (cmp(current->data, current->next->data) > 0) {
+            std::cout << "❌ Sorting check failed on list.\n";
+            return false;
+        }
+        current = current->next;
+    }
+
+    return true; // If we got through the whole loop, the list is sorted.
+}
 
 
 int main()
@@ -903,37 +1039,77 @@ int main()
 
 	// Sorting algorithm //
 
-	OperationSummary selStats{};
-	OperationSummary bubStats{};
-	OperationSummary quickStats{};
-	OperationSummary mergeStats{};
-	TSort sorter(bankAccounts, bankAccountArray, totalAccounts);
+	OperationSummary selArrStats{}, bubArrStats{}, quickArrStats{};
+OperationSummary selListStats{}, mergeListStats{};
+TSort sorter(bankAccounts, bankAccountArray, totalAccounts);
 	
 
-	auto selSorted = sorter.SelectionSortArray(CompareByBalance, selStats);
-	auto bubSorted = sorter.BubbleSortArray(CompareByBalance, bubStats);
-	auto quickSorted = sorter.QuickSortArray(CompareByBalance, quickStats);
+auto selSorted = sorter.SelectionSortArray(CompareByLastName, selArrStats);
+auto bubSorted = sorter.BubbleSortArray(CompareByLastName, bubArrStats);
+auto quickSorted = sorter.QuickSortArray(CompareByLastName, quickArrStats);
+auto selSortedList = sorter.SelectionSortLinkedList(CompareByLastName, selListStats);
+auto mergeSortedList = sorter.MergeSortList(CompareByLastName, mergeListStats);
 	//auto quickSorted = QuickSort
-	printOperationSummary("Bubble Sort (Array, by Balance)", bubStats);
-	printOperationSummary("Selection Sort (Array, by Balance)", selStats);
-	printOperationSummary("Quick Sort (Array, by Balance)", quickStats);
+	printOperationSummary("Selection Sort (Array)", selArrStats);
+printOperationSummary("Bubble Sort (Array)", bubArrStats);
+printOperationSummary("Quick Sort (Array)", quickArrStats);
+printOperationSummary("Selection Sort (List)", selListStats);
+printOperationSummary("Merge Sort (List)", mergeListStats);
 
-	bool bubbleOk = isSortedByBalance(bubSorted, totalAccounts, CompareByBalance);
-	bool selectionOk = isSortedByBalance(selSorted, totalAccounts, CompareByBalance);
-	bool quickOk = isSortedByBalance(quickSorted, totalAccounts, CompareByBalance);
+	bool selArrOk = isSortedByBalance(selSorted, totalAccounts, CompareByLastName);
+bool bubArrOk = isSortedByBalance(bubSorted, totalAccounts, CompareByLastName);
+bool quickArrOk = isSortedByBalance(quickSorted, totalAccounts, CompareByLastName);
+bool selListOk = isListSorted(selSortedList, CompareByLastName);
+bool mergeListOk = isListSorted(mergeSortedList, CompareByLastName);
 
-	std::cout << "✅ Bubble Sort check: " << (bubbleOk ? "PASSED" : "FAILED") << std::endl;
-	std::cout << "✅ Selection Sort check: " << (selectionOk ? "PASSED" : "FAILED") << std::endl;
-	std::cout << "✅ Quick Sort check: " << (quickOk ? "PASSED" : "FAILED") << std::endl;
+	std::cout << "✅ Selection Sort (Array) check: " << (selArrOk ? "PASSED" : "FAILED") << std::endl;
+std::cout << "✅ Bubble Sort (Array) check: " << (bubArrOk ? "PASSED" : "FAILED") << std::endl;
+std::cout << "✅ Quick Sort (Array) check: " << (quickArrOk ? "PASSED" : "FAILED") << std::endl;
+std::cout << "✅ Selection Sort (List) check: " << (selListOk ? "PASSED" : "FAILED") << std::endl;
+std::cout << "✅ Merge Sort (List) check: " << (mergeListOk ? "PASSED" : "FAILED") << std::endl;
 
 	// TODO: QUICKSORT //
 	// auto quickSorted = sorter.QuickSortArray(CompareByBalance, quickStats);
 	// printOperationSummary("Quick Sort (Array, by Balance)", quickStats);
 
+	std::cout << "\n--- Part 5: Linear vs. Binary Search ---\n";
+
+// 1. Pick a target account to search for. Let's pick one from the middle.
+//    We use `quickSorted` because we know it's sorted by last name.
+int searchIndex = totalAccounts / 2;
+TBankAccount* accountToFind = quickSorted[searchIndex];
+
+std::cout << "Searching for: " << accountToFind->ownerFirstName << " " << accountToFind->ownerLastName << std::endl;
+
+// 2. Perform the old Linear Search
+SearchSummary linearSummary = {0, 0.0};
+// Note: We use the UNSORTED original `bankAccountArray` for a fair linear search
+FindAccountByNumber(bankAccountArray, totalAccounts, accountToFind->getAccountNumber(), linearSummary);
+std::cout << "Linear Search Results:" << std::endl;
+printStatistics(linearSummary);
+
+// 3. Perform the new Binary Search
+//    The sorter object now "remembers" the sorted array from when we called QuickSortArray.
+SearchSummary binarySummary = {0, 0.0};
+sorter.BinarySearch(accountToFind, CompareByLastName, binarySummary);
+std::cout << "Binary Search Results:" << std::endl;
+printStatistics(binarySummary);
+
 
 	delete[] selSorted;
 	delete[] bubSorted;
 	delete[] quickSorted;
+
+	while (selSortedList != nullptr) {
+        TLinkedListNode* temp = selSortedList;
+        selSortedList = selSortedList->next;
+        delete temp;
+    }
+    while (mergeSortedList != nullptr) {
+        TLinkedListNode* temp = mergeSortedList;
+        mergeSortedList = mergeSortedList->next;
+        delete temp;
+    }
 
 	int getRandomIndex = rand() % bankAccounts->getSize();
 	SearchSummary arrayFindSummaryNearEnd{ 0, 0.0 };
